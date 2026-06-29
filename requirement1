@@ -1,0 +1,9 @@
+Create a RAG application.
+
+download the Indian Constution or BNS law in pdf and create a vector db.
+
+create a RAG pipeline from vector db for the LLM
+
+then when user provides prompt the LLM should respond based on the latest data available in the vector db.
+
+use LM studio and to download a LLM model and run it locally in the laptop. the model should have lessthan 1B or 100M parameter.
