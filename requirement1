@@ -1,5 +1,8 @@
 Create a RAG application.
 
+research about tokens embedding and vector db. make sure you're using correct embedding model for the llm you use.
+
+
 download the Indian Constution or BNS law in pdf and create a vector db.
 
 create a RAG pipeline from vector db for the LLM
