@@ -1,0 +1,7 @@
+chromadb
+pypdf
+openai
+fastapi
+uvicorn[standard]
+sse-starlette
+httpx

@@ -1,0 +1,17 @@
+services:
+  chromadb:
+    image: "chromadb/chroma:1.5.0"
+    ports:
+      - "8080:8000"
+    volumes:
+      - chroma-data:/data
+      - ./config.yaml:/config.yaml
+  chromadb-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8090:80"
+volumes:
+  chroma-data:
+    driver: local

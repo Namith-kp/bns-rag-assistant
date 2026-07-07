@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="BNS 2023 RAG Assistant — AI-powered legal query interface with live pipeline inspection." />
+  <title>BNS 2023 · RAG Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css?v=5" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header id="header">
+    <div id="header-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#6366f1"/>
+        <path d="M8 20V10l6-4 6 4v10" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>
+        <rect x="11" y="14" width="6" height="6" rx="1" fill="white"/>
+        <circle cx="14" cy="10" r="1.5" fill="white"/>
+      </svg>
+      <div>
+        <h1>BNS 2023 RAG Assistant</h1>
+        <span>Bharatiya Nyaya Sanhita · AI-powered legal Q&amp;A</span>
+      </div>
+    </div>
+
+    <button id="inspector-toggle-btn" aria-label="Toggle Pipeline Inspector">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      <span>Inspector</span>
+    </button>
+
+    <div id="health-badge" role="status" aria-live="polite">
+      <span class="health-dot" id="health-dot"></span>
+      <span id="health-text">Checking…</span>
+    </div>
+  </header>
+
+  <!-- ── Chat Panel ──────────────────────────────────────────────────────── -->
+  <main id="chat-panel" role="main">
+    <div id="messages" aria-label="Conversation">
+      <div id="empty-state" aria-hidden="true">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="6" y="10" width="36" height="28" rx="4"/>
+          <path d="M16 20h16M16 27h10"/>
+        </svg>
+        <p>Ask a question about the Bharatiya Nyaya Sanhita 2023</p>
+      </div>
+    </div>
+
+    <!-- Error banner -->
+    <div id="error-banner" role="alert">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span id="error-msg">Connection error</span>
+      <button id="error-dismiss" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <!-- Input -->
+    <div id="input-area">
+      <form id="input-form" autocomplete="off">
+        <textarea
+          id="query-input"
+          rows="1"
+          placeholder="Ask about BNS 2023 — e.g. What is the punishment for theft?"
+          aria-label="Query input"
+          required
+        ></textarea>
+        <div id="input-actions">
+          <button id="mic-btn" type="button" aria-label="Dictate via microphone" title="Voice Input">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+          <button id="send-btn" type="submit" aria-label="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- ── Pipeline Inspector ──────────────────────────────────────────────── -->
+  <aside id="inspector" aria-label="Pipeline Inspector">
+    <div id="inspector-header">
+      <h2>Pipeline Inspector</h2>
+    </div>
+
+    <div id="inspector-body">
+
+      <!-- Architecture diagram -->
+      <div id="arch-diagram-wrap">
+        <h3>Architecture</h3>
+        <svg id="arch-svg" viewBox="0 0 380 56" width="100%"
+             aria-label="RAG pipeline architecture diagram">
+          <defs>
+            <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L6,3 z" fill="#505668"/>
+            </marker>
+            <marker id="arr-active" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L6,3 z" fill="#6366f1"/>
+            </marker>
+          </defs>
+          <style>
+            .arch-node rect { fill: #1a1e25; stroke: #2d3341; stroke-width: 1; rx: 6; }
+            .arch-node text { fill: #8890a4; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+            .arch-node.arch-active rect { fill: #20252e; stroke: #6366f1; stroke-width: 1.5; }
+            .arch-node.arch-active text { fill: #a5b4fc; }
+            .arch-node.arch-done rect   { fill: #0d1a14; stroke: #34d399; stroke-width: 1; }
+            .arch-node.arch-done text   { fill: #6ee7b7; }
+            .arch-arrow { stroke: #2d3341; stroke-width: 1; fill: none; marker-end: url(#arr); }
+          </style>
+
+          <!-- Query node (always active start) -->
+          <g class="arch-node" id="arch-query">
+            <rect x="2" y="16" width="44" height="24" rx="5"/>
+            <text x="24" y="30" text-anchor="middle" dominant-baseline="middle">Query</text>
+          </g>
+          <line class="arch-arrow" x1="46" y1="28" x2="56" y2="28"/>
+
+          <g class="arch-node" id="arch-embed">
+            <rect x="58" y="16" width="44" height="24" rx="5"/>
+            <text x="80" y="30" text-anchor="middle" dominant-baseline="middle">Embed</text>
+          </g>
+          <line class="arch-arrow" x1="102" y1="28" x2="112" y2="28"/>
+
+          <g class="arch-node" id="arch-search">
+            <rect x="114" y="10" width="60" height="36" rx="5"/>
+            <text x="144" y="27" text-anchor="middle" dominant-baseline="middle">Vector</text>
+            <text x="144" y="39" text-anchor="middle" dominant-baseline="middle">Search</text>
+          </g>
+          <line class="arch-arrow" x1="174" y1="28" x2="184" y2="28"/>
+
+          <g class="arch-node" id="arch-context">
+            <rect x="186" y="10" width="60" height="36" rx="5"/>
+            <text x="216" y="27" text-anchor="middle" dominant-baseline="middle">Context</text>
+            <text x="216" y="39" text-anchor="middle" dominant-baseline="middle">+Prompt</text>
+          </g>
+          <line class="arch-arrow" x1="246" y1="28" x2="256" y2="28"/>
+
+          <g class="arch-node" id="arch-llm">
+            <rect x="258" y="16" width="36" height="24" rx="5"/>
+            <text x="276" y="30" text-anchor="middle" dominant-baseline="middle">LLM</text>
+          </g>
+          <line class="arch-arrow" x1="294" y1="28" x2="304" y2="28"/>
+
+          <g class="arch-node" id="arch-answer">
+            <rect x="306" y="16" width="52" height="24" rx="5"/>
+            <text x="332" y="30" text-anchor="middle" dominant-baseline="middle">Answer</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Idle state -->
+      <div id="inspector-idle">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <p>Send a query to watch the pipeline execute in real time</p>
+      </div>
+
+      <!-- Pipeline steps (hidden until query) -->
+      <div id="pipeline-wrap" style="display:none; flex-direction:column; gap:4px;">
+
+        <!-- Stage: Embedding -->
+        <div class="stage-item" id="stage-embedding">
+          <div class="stage-header">
+            <div class="stage-dot"></div>
+            <span class="stage-name">Query Embedding</span>
+            <span class="stage-badge" id="badge-embedding"></span>
+          </div>
+        </div>
+
+        <!-- Stage: Retrieval -->
+        <div class="stage-item" id="stage-retrieval">
+          <div class="stage-header">
+            <div class="stage-dot"></div>
+            <span class="stage-name">Vector Retrieval</span>
+            <span class="stage-badge" id="badge-retrieval"></span>
+          </div>
+          <div class="stage-detail" id="detail-retrieval"></div>
+        </div>
+
+        <!-- Stage: Prompt Built -->
+        <div class="stage-item" id="stage-prompt">
+          <div class="stage-header">
+            <div class="stage-dot"></div>
+            <span class="stage-name">Prompt Assembly</span>
+            <span class="stage-badge" id="badge-prompt"></span>
+          </div>
+          <div class="stage-detail" id="detail-prompt"></div>
+        </div>
+
+        <!-- Stage: Generating -->
+        <div class="stage-item" id="stage-generating">
+          <div class="stage-header">
+            <div class="stage-dot"></div>
+            <span class="stage-name">LLM Generation</span>
+            <span class="stage-badge" id="badge-generating"></span>
+          </div>
+          <div class="stage-detail">
+            <div id="token-display" style="display:none;">
+              <div class="token-meta">
+                <span class="token-label">Live stream</span>
+                <span id="token-counter" class="mono">0 tokens</span>
+              </div>
+              <div id="token-stream"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage: Done -->
+        <div class="stage-item" id="stage-done">
+          <div class="stage-header">
+            <div class="stage-dot"></div>
+            <span class="stage-name">Answer Ready</span>
+            <span class="stage-badge" id="badge-done"></span>
+          </div>
+        </div>
+
+      </div><!-- /pipeline-wrap -->
+    </div><!-- /inspector-body -->
+  </aside>
+
+</div><!-- /app -->
+
+<script src="/static/app.js?v=5"></script>
+</body>
+</html>
