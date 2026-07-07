@@ -1,140 +1,143 @@
-# BNS 2023 RAG Assistant
+# ⚖️ BNS 2023 RAG Assistant
 
-A local Retrieval-Augmented Generation (RAG) system for the **Bharatiya Nyaya Sanhita 2023**, powered by ChromaDB and LM Studio, with a professional web frontend featuring a live Pipeline Inspector.
+> **An offline, AI-powered Retrieval-Augmented Generation (RAG) assistant for querying India's Bharatiya Nyaya Sanhita (BNS) 2023 legal code.**
 
----
-
-## Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Vector DB | ChromaDB (local, persistent) |
-| Embedding | `text-embedding-nomic-embed-text-v1.5` via LM Studio |
-| Chat LLM  | `qwen2.5-0.5b-instruct` via LM Studio |
-| Backend   | FastAPI + `sse-starlette` (Server-Sent Events) |
-| Frontend  | Vanilla HTML/CSS/JS — no build step |
+Built with a focus on privacy and precision, this project leverages local Large Language Models (LLMs) via **LM Studio** and **ChromaDB** to provide context-aware, highly accurate answers to legal queries without sending sensitive data to the cloud. It features a modern web UI with a real-time pipeline inspector, a robust FastAPI backend, and smart section-aware document chunking.
 
 ---
 
-## Prerequisites
+## 🌟 Features
 
-1. **Python 3.10+** installed
-2. **[LM Studio](https://lmstudio.ai/)** installed and running
+- **100% Local & Private**: All embeddings and chat inferences run entirely on your local machine using LM Studio. No API costs, no data leaks.
+- **Section-Aware Chunking**: Intelligently chunks the BNS 2023 PDF based on actual legal section boundaries rather than arbitrary character counts, ensuring the LLM always receives complete legal context.
+- **Multi-turn Conversation State**: Tracks the current topic and gracefully handles pronoun-based follow-up questions (e.g., *"What is the punishment for murder?"* followed by *"Does it apply to minors?"*).
+- **Strict Out-of-Scope Rejection**: Enforces similarity thresholds during vector retrieval to firmly decline non-legal or irrelevant queries, preventing AI hallucination.
+- **Real-time Pipeline Inspector**: A modern Web UI (inspired by ChatGPT/Claude) that streams not only the LLM's response tokens but also the backend RAG stages (Embedding → Retrieval → Prompt Assembly) via Server-Sent Events (SSE).
+- **MCP Server Support**: Exposes the database to MCP clients (like Claude Desktop) via the Model Context Protocol.
 
 ---
 
-## Setup
+## 🏗️ System Architecture
 
-### 1. Install dependencies
+```mermaid
+graph TD
+    subgraph Data Ingestion
+        PDF[BNS 2023 PDF] --> |Regex Split| Chunk[Section-aware Chunking]
+        Chunk --> |nomic-embed-text| VDB[(ChromaDB)]
+    end
+
+    subgraph Client UIs
+        Web[Web UI / HTML+JS]
+        CLI[Terminal CLI]
+        MCP[MCP Client]
+    end
+
+    subgraph Backend Services
+        Web --> |SSE Streaming| FastAPI[FastAPI Server]
+        CLI --> Core
+        MCP --> FastMCP[MCP Server]
+        FastAPI --> Core[RAG Pipeline]
+        FastMCP --> Core
+    end
+
+    subgraph Local AI Engine
+        Core --> |Vector Search| VDB
+        Core --> |Generate| LMStudio[LM Studio Engine]
+    end
+```
+
+### Core Components
+
+1. **`ingest.py`**: The data processor. Reads the PDF, strips noise, splits text using em-dash section boundaries, sub-chunks sections longer than 800 characters with overlap, and ingests them into ChromaDB.
+2. **`rag_pipeline.py`**: The brain. Manages the `ConversationState`, builds the retrieval queries, queries ChromaDB, enforces similarity thresholds, constructs the few-shot prompt, and streams LLM output.
+3. **`server.py`**: The web backend. A FastAPI app providing a `/chat/stream` endpoint that yields SSE events for UI visualization.
+4. **`app.py`**: A fallback interactive command-line interface.
+5. **`mcp_server.py`**: A FastMCP implementation exposing the BNS tool to LLM agents.
+6. **`static/`**: Vanilla JS/CSS/HTML frontend featuring a dual-pane layout with the chat interface and the pipeline inspector.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+
+- Python 3.10+
+- [LM Studio](https://lmstudio.ai/) installed and running.
+- Node.js (only if running the optional ChromaDB UI viewer).
+
+### 2. Environment Setup
+
+Clone the repository and install dependencies:
 
 ```bash
+git clone <your-repo-url>
+cd Group-Project
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# Mac/Linux
+source venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
-### 2. Ingest documents (first-time only)
+### 3. LM Studio Configuration
 
-Place your PDF(s) in the `data/` folder (a copy of BNS 2023 is already there), then run:
+1. Open **LM Studio** and navigate to the **Local Server** tab.
+2. Ensure the server is running on port `1234`.
+3. Load the following models:
+   - **Chat model:** `qwen2.5-0.5b-instruct` (or any equivalent instruct model).
+   - **Embedding model:** `text-embedding-nomic-embed-text-v1.5`.
+
+### 4. Ingest the Data
+
+Before running the server, you must process the BNS 2023 PDF and populate the vector database:
 
 ```bash
 python ingest.py
 ```
+*Note: This will read `data/bns_2023.pdf`, generate embeddings, and store them in the `./chroma_db` directory.*
 
-This builds the ChromaDB vector store at `./chroma_db`.
+### 5. Run the Application
 
----
-
-## Running Fully Offline
-
-This application is designed to function entirely without internet access once the initial environment is set up.
-
-- **No external API calls:** The backend (`server.py`) and RAG pipeline (`rag_pipeline.py`) strictly route all requests to your local LM Studio instance (`localhost:1234`).
-- **No external frontend assets:** The UI uses system font stacks and inline SVG icons. It does not fetch Google Fonts or CDN scripts.
-- **Query Rewriting:** Follow-up questions are intelligently rewritten using the local chat model based on conversation history, so no external service is needed for context management.
-
-### Verification Instructions
-1. Ensure your models (`qwen2.5-0.5b-instruct` and `text-embedding-nomic-embed-text-v1.5`) are fully downloaded in LM Studio.
-2. In LM Studio, disable "auto-update" or telemetry options if desired.
-3. Disconnect your computer from the internet (turn off Wi-Fi/Ethernet).
-4. Run `uvicorn server:app --reload` and load `http://localhost:8000`. The interface will load correctly, and queries will process successfully offline.
-
----
-
-## Running the Web App
-
-### Step 1 — Start LM Studio
-
-1. Open **LM Studio** on your machine.
-2. Go to **Local Server** (the plug icon on the left sidebar).
-3. Load the following models:
-   - **Chat model:** `qwen2.5-0.5b-instruct`
-   - **Embedding model:** `text-embedding-nomic-embed-text-v1.5`
-4. Click **Start Server** (default port: `1234`).
-
-> You can verify it's running by visiting: http://localhost:1234/v1/models
-
-### Step 2 — Start the FastAPI server
-
-From the project root directory:
+Start the FastAPI server:
 
 ```bash
 uvicorn server:app --reload
 ```
+Navigate to [http://localhost:8000](http://localhost:8000) in your browser to interact with the Web UI.
 
-The server starts on http://localhost:8000.
-
-### Step 3 — Open the UI
-
-Navigate to: **http://localhost:8000**
-
----
-
-## API Reference
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Serves the web frontend |
-| `GET /health` | Checks whether both LM Studio models are loaded |
-| `POST /chat/stream` | Server-Sent Events stream (JSON body `{ query, history }`) |
-| `GET /static/*` | Static file serving |
-
-### SSE Event Types
-
-| Event | Payload |
-|-------|---------|
-| `embedding` | `{status, expanded_query?, ms?}` |
-| `retrieval` | `{status, chunks?, total_candidates?, ms?}` |
-| `prompt_built` | `{status, estimated_tokens, context_chars}` |
-| `generating` | `{status, token?, token_count}` |
-| `done` | `{status, answer, total_tokens, sources}` |
-| `error` | `{detail}` |
-
----
-
-## Project Structure
-
-```
-.
-├── data/               # Source PDF(s)
-├── chroma_db/          # Vector store (generated by ingest.py)
-├── static/
-│   ├── index.html      # Main UI
-│   ├── styles.css      # Dark theme, design tokens
-│   └── app.js          # SSE client, chat renderer, pipeline inspector
-├── ingest.py           # PDF ingestion + embedding
-├── rag_pipeline.py     # Core RAG logic (embed → retrieve → rerank → LLM)
-├── server.py           # FastAPI backend with SSE streaming
-├── app.py              # CLI interface (alternative to web UI)
-└── requirements.txt
-```
-
----
-
-## CLI Usage (alternative)
-
-If you prefer the terminal:
-
+Alternatively, for a quick terminal session:
 ```bash
 python app.py
 ```
 
-This runs the same RAG pipeline interactively in your shell.
+---
+
+## 🛠️ Advanced Usage
+
+### Running the MCP Server
+To allow an MCP client (like Claude) to query your BNS database, you can run the MCP server:
+```bash
+python mcp_server.py
+```
+
+### Viewing the ChromaDB (Optional)
+If you wish to visually inspect the vector embeddings, you can use the embedded ChromaDB UI. 
+
+In Terminal 1 (Start Chroma backend):
+```bash
+chroma run --path chroma_db --port 8000
+```
+In Terminal 2 (Start UI):
+```bash
+cd chromadb-ui
+npm install
+npm run dev
+```
+
+---
+
+## 🛡️ License & Disclaimer
+
+This project is intended for educational and research purposes. Do not use the AI-generated outputs as formal legal advice. Always consult the official bare act or a qualified legal professional for matters pertaining to the Bharatiya Nyaya Sanhita, 2023.
